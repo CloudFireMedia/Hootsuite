@@ -1,5 +1,5 @@
 var SCRIPT_NAME    = 'HootSuite'
-var SCRIPT_VERSION = 'v0.dev_ajr'
+var SCRIPT_VERSION = 'v1.0'
 
 // Public Functions
 // ----------------
@@ -16,10 +16,9 @@ function importRecurringEvents(config) {return importRecurringEvents_(config)}
  */
 
 function deleteRows_() {
-
+  
   var sheet = SpreadsheetApp.getActive().getSheetByName("Current Month");
-  var start, end;
-  sheet.deleteRows(2, sheet.getLastRow() - 1);
+  sheet.deleteRows(2, sheet.getLastRow() - 2);
   
 } // deleteRows_()
 
@@ -96,8 +95,8 @@ function importRecurringEvents_(config) {
     var spreadsheet = SpreadsheetApp.getActive();
     var sheet = spreadsheet.getSheetByName("Current Month");
     
-    if (!sheet) {
-      throw 'Error opening sheet "Current Month" in ' + spreadsheet.getName()
+    if (sheet === null) {
+      throw new Error('Error opening sheet "Current Month" in ' + spreadsheet.getName())
     }
     
     var BASE_DATE = new Date(config.basedate);
@@ -113,49 +112,78 @@ function importRecurringEvents_(config) {
     
       var child = body.getChild(i);
       var childType = child.getType();
+      
       if (childType == DocumentApp.ElementType.PAGE_BREAK) {
         ++pageBreakCounter;
         continue;
       }
+      
       if (childType == DocumentApp.ElementType.PARAGRAPH) {
+      
         var paragraph = child.asParagraph();
         var paragraphNumChildren = paragraph.getNumChildren();
-        if (pageBreakCounter == 0) {
-          var text = paragraph.getText();
-          if ((text != "[ RECURRING CONTENT ]") && (text != "")) {
+        
+        if (pageBreakCounter == 1) {
+        
+          var text = paragraph.getText().trim();
+          
+          if ((text !== "[ RECURRING CONTENT ]") && (text !== "")) {
+          
+            Logger.log('Found non recurring content')
+            
             var paraText = child.asParagraph().getText();
-            if (paraText.indexOf("??>>??") == -1) {
+            
+            Logger.log('paraText: ' + paraText)
+            
+            if (paraText.indexOf("??>>??") === -1) {
               recurringContentParagraphs.push(child.asParagraph());
             }
           }
         }
+        
         if (pageBreakCounter > 1) {
           insertIndex = i;
           break;
         }
+        
         var foundPageBreak = false;
+        
         for (var j = 0; j < paragraphNumChildren; ++j) {
+        
           var paragraphChild = paragraph.getChild(j);
           var paragraphChildType = paragraphChild.getType();
+          
           if (paragraphChildType == DocumentApp.ElementType.PAGE_BREAK) {
             ++pageBreakCounter;
             foundPageBreak = true;
             break;
           }
         }
-        if (foundPageBreak) continue;
+        
+        if (foundPageBreak) {
+          continue;
+        }
       }
-    }
+      
+    } // for each child in the doc
+        
+    recurringContentParagraphs.forEach(function(recurringContentParagraph, index) {
+      Logger.log('recurringContentParagraphs: [' + index + '] ' + recurringContentParagraph.getText())    
+    })
         
     var content = []
+    
     for (var i = 0; i < recurringContentParagraphs.length; ++i) {
+    
       var paragraph = recurringContentParagraphs[i];
       var text = paragraph.editAsText();
       var textAsString = text.getText();
       var criteriaString = "";
       var foundStartChar = 0;
       var foundEndChar = 0;
+      
       for (var j = 0; j < textAsString.length; ++j) {
+      
         if (textAsString[j] == "<") {
           foundStartChar += 1;
         }
@@ -171,7 +199,7 @@ function importRecurringEvents_(config) {
       }
       
       criteriaString = criteriaString.toLowerCase().replace(/ /g, ""); //flexibility with capitalization and spaces   
-      Logger.log(criteriaString);
+      Logger.log('criteriaString: ' + criteriaString);
       var fullDate = new Date();
       var todaysDate = new Date(fullDate.getYear(), fullDate.getMonth(), fullDate.getDate());
       var currentMonth = new Date(fullDate.getYear(), fullDate.getMonth());
@@ -192,6 +220,7 @@ function importRecurringEvents_(config) {
             }
           }
         }
+        
       } else if (criteriaString.indexOf("second sunday of the month".replace(/ /g, "")) != -1) {
         
         for (var d = 0; d < daysToSearch; ++d) {
@@ -208,6 +237,7 @@ function importRecurringEvents_(config) {
             }
           }
         }
+        
       } else if (criteriaString.indexOf("third sunday of the month".replace(/ /g, "")) != -1) {
         
         for (var d = 0; d < daysToSearch; ++d) {
@@ -224,6 +254,7 @@ function importRecurringEvents_(config) {
             }
           }
         }
+        
       } else if ((criteriaString.indexOf("fourth sunday of the month".replace(/ /g, "")) != -1) && 
                  (criteriaString.indexOf("fifth sunday exists in the same month".replace(/ /g, "")) != -1)) {
         
@@ -234,7 +265,7 @@ function importRecurringEvents_(config) {
               var hasFifthSunday = false;
               for (var dd = date.getDate(); dd <= daysInMonth(date.getMonth(), date.getYear()); ++dd) {
                 var testForFifthSundayDate = new Date(date.getYear(), date.getMonth(), dd);
-                Logger.log(testForFifthSundayDate);
+                Logger.log('testForFifthSundayDate: ' + testForFifthSundayDate);
                 if ((testForFifthSundayDate.getDay() == 0) && (testForFifthSundayDate.getDate() / 7 > 4)) {
                   hasFifthSunday = true;
                   break;
@@ -255,6 +286,7 @@ function importRecurringEvents_(config) {
             }
           }
         }
+        
       } else if (criteriaString.indexOf("fourth sunday of the month".replace(/ /g, "")) != -1) {
         
         for (var d = 0; d < daysToSearch; ++d) {
@@ -271,6 +303,7 @@ function importRecurringEvents_(config) {
             }
           }
         }
+        
       } else if (criteriaString.indexOf("last sunday of the month".replace(/ /g, "")) != -1) {
         for (var d = 0; d < daysToSearch; ++d) {
           var date = new Date(todaysDate.getYear(), todaysDate.getMonth(), todaysDate.getDate() + d);
